@@ -1,4 +1,9 @@
 <?php
+/*
+ * THIS FILE IS PART OF THE WTVA PROJECT - AN OPEN SOURCE PROJECT
+ *
+ * USE AS YOU WISH, BUT THERE ARE NO WARRANTIES OF ANY KIND AS TO ACCURACY OR SUITABILITY FOR ANY PURPOSE.
+ */
 
 if (!function_exists('mb_trim')) {
     function mb_trim(string $string, ?string $characters = null): string {
