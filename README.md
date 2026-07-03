@@ -78,10 +78,11 @@ each trasnform being successively applied to the 3D point.
 That meant for the blade I could implement something that handled the application 
 of the scaling (in this case, the X axis) but only for positive values of X. So, 
 if I arrange that a circle is flat (i.e. only varying in X and Y) and centred on
-the origin (0,0), by scaling for positive values of X, I get a (potentially) 
-infinite cylinder. But, by scaling for negative values of X, I get a (potentially) 
+the origin (0,0), by scaling only for positive values of X, I get half of an ellipse. 
+The other half is still a semicricle (at the "back") with the 
 highly tapered semicircle "at the front", which is reasonably convincing as a 
-wing chord. Then, by applying a rotation about Z (assuming the base frustum is 
+wing chord. Then, by applying a rotation about Z (assuming the underlying frustum, 
+or hemisphere, is 
 "upright") for increasing values of Z, we get a longitudinal twist.
 
 That was the 3D modelling solved (!). And thus the generation of the .DAE file.
