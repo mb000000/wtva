@@ -582,13 +582,15 @@ var_dump( $E + $easting_offset,
         }
         if (! $match)
         {
-            $match = mb_ereg( $re_dd, $coordinate_to_test );
+            $match = mb_ereg( $re_dd, $coordinate_to_test, $matches );
+//file_put_contents($this->DEBUGFILE, 'wtva/'.__LINE__. sprintf( ' coord=%s match=%s matches=%s', $coordinate_to_test, print_r( $match, true ), print_r( $matches, true ) ) .PHP_EOL, FILE_APPEND);
             if ($match)
             {
                 $lat = (float)$matches[0];
                 $match_len = mb_strlen( $matches[0] );
-                $coord_part2 = mb_substr( $coordinate_to_test, $match_len );
-                $match = mb_ereg( $re_dd, $coordinate_to_test, $matches );
+                $coord_part2 = mb_trim( mb_substr( $coordinate_to_test, $match_len ) );
+                $match = mb_ereg( $re_dd, $coord_part2, $matches );
+//file_put_contents($this->DEBUGFILE, 'wtva/'.__LINE__. sprintf( ' coord=%s match=%s matches=%s', $coord_part2, print_r( $match, true ), print_r( $matches, true ) ) .PHP_EOL, FILE_APPEND);
                 if ($match)
                 {
                     $rest = mb_substr( $coord_part2, mb_strlen( $matches[0] ) );
@@ -596,6 +598,7 @@ var_dump( $E + $easting_offset,
                     $coord_okay = true;
                     $lat_r = deg2rad( $lat );
                     $lon_r = deg2rad( $lon );
+//file_put_contents($this->DEBUGFILE, 'wtva/'.__LINE__. sprintf( ' rest=%s lat=%0.6f lon=%0.6f', $rest, $lat, $lon ) .PHP_EOL, FILE_APPEND);
                     list( $x, $y, $z ) = $this->convert_lat_lon_to_xyz(
                         array( $lat_r, $lon_r ),
                         $this->wgs84_a_m,
@@ -868,6 +871,7 @@ var_dump( $E + $easting_offset,
                                 }
                                 array_shift( $location_parts );
                             }
+//file_put_contents($this->DEBUGFILE, 'wtva/'.__LINE__. sprintf(' location_parts=%s', print_r( $location_parts, true ) ) .PHP_EOL, FILE_APPEND);
                             list( $coord_okay,
                                 $lat, $lon,
                                 $lat_r, $lon_r,
