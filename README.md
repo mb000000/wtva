@@ -110,6 +110,13 @@ change the datum from Airy1830 to WGS84. These data effectively define the
 approximation of the shape of the Earth, which is an ellipsoid. The different data 
 use subtly different approximations, so the conversion is quite important. Again, 
 this is well documented (and not quite as horrendous as the projection maths).
+### Single location with counts
+It may be the case that the exact location of each turbine is not known. In that
+case, allowing specification of a location (lat, lon etc) with a count of turbines
+there helps. But how to arrange them? I chose hexagonal packing as that apparently
+occupies space with about 90% efficiency. And an excellent opportunity to develop an
+algorithm for generating those (and also for ensuring "sensible" limits to number
+are observed - you may wish to review the code for that ;-) )
 ## Finally
 With all that under the covers, the wtva is accessed (or accessible) via 
 a web page which allows various parameters defining the wind turbines to be entered. 
