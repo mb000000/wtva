@@ -588,7 +588,7 @@ require_once 'common_constants.php';
                 d.<?php echo K_NACELLESHAPE; ?> = f.<?php echo K_NACELLESHAPE; ?>.value;
                 d.<?php echo K_LOCATIONS; ?> = f.<?php echo K_LOCATIONS; ?>.value.trim();
 
-                console.log( JSON.stringify(d) );
+                //console.log( JSON.stringify(d) );
                 this.isGenerating = true;
 
                 fetch('generate_wtva.php', {
