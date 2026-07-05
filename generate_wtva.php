@@ -3,6 +3,10 @@
  * THIS FILE IS PART OF THE WTVA PROJECT - AN OPEN SOURCE PROJECT
  *
  * USE AS YOU WISH, BUT THERE ARE NO WARRANTIES OF ANY KIND AS TO ACCURACY OR SUITABILITY FOR ANY PURPOSE.
+ *
+ * Created under Creative Commons By Attribution-ShareAlike 4.0 International
+ * https://creativecommons.org/licenses/by-sa/4.0/
+ *
  */
 declare(strict_types=1);
 

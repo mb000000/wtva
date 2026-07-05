@@ -3,6 +3,10 @@
  * THIS FILE IS PART OF THE WTVA PROJECT - AN OPEN SOURCE PROJECT
  *
  * USE AS YOU WISH, BUT THERE ARE NO WARRANTIES OF ANY KIND AS TO ACCURACY OR SUITABILITY FOR ANY PURPOSE.
+ *
+ * Created under Creative Commons By Attribution-ShareAlike 4.0 International
+ * https://creativecommons.org/licenses/by-sa/4.0/
+ *
  */
 
 if (!function_exists('mb_trim')) {
@@ -126,6 +130,16 @@ class wtva
     // Section B.1 - equation B1
     protected float $wgs84_e_squared = 0.00669438003551284; // (a^2 - b^2) / a^2
 
+    // Hexagonal packing efficiency - about 90% - quite impressive
+    protected float $hexagonal_packing_efficiency = 0.9;
+
+    // Land areas
+    protected float $land_area_sun_m2     = 6.09E18; // but it's not really land is it? Also, er, wind....?
+    protected float $land_area_earth_m2   = 148940000 * 1000000; // 148.94 km^2
+    protected float $land_area_asia_m2    =  44579000 * 1000000; //  44.579 km^2
+    protected float $land_area_russia_m2  =  17098242 * 1000000; //  17.098242 km^2
+    protected float $land_area_uk_m2      =    244376 * 1000000;
+
     // -----------------------------------------------------------------------------------------------------------------
     public function __construct()
     {
@@ -158,6 +172,102 @@ class wtva
         }
 
         $this->data[$field] = $adjusted;
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------
+    protected function earthRadiusAtLatTriple(
+        float $lat_deg
+    ) : array
+    {
+        // radcur
+        $a_m     = $this->wgs84_a_m;
+        $b_m     = $this->wgs84_b_m;
+
+        $asq   = $a_m * $a_m;
+        $bsq   = $b_m * $b_m;
+        $eccsq  =  1 - $bsq / $asq;
+        //$ecc = sqrt( $eccsq );
+
+        $clat  =  cos(deg2rad( $lat_deg ) );
+        $slat  =  sin(deg2rad( $lat_deg ) );
+
+        $dsq   =  1.0 - $eccsq * $slat * $slat;
+        $d     =  sqrt( $dsq );
+
+        $rn    =  $a_m / $d;
+        $rm    =  $rn * (1.0 - $eccsq ) / $dsq;
+
+        $rho   =  $rn * $clat;
+        $z     =  (1.0 - $eccsq ) * $rn * $slat;
+        $rsq   =  $rho * $rho + $z * $z;
+        $r_m   =  sqrt( $rsq );
+
+        return array( $r_m, $rn, $rm );
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------
+    public function earthRadiusAtLat_m(
+        float $lat_deg
+    ) : float
+    {
+        // rearth
+        list( $r_m, $rn, $rm ) = $this->earthRadiusAtLatTriple( $lat_deg );
+        return $r_m;
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------
+    public function normaliseLat_deg(
+        float $lat_deg
+    ) : float
+    {
+        if ($lat_deg > 90.0)
+        {
+            $lat_deg = 180.0 - $lat_deg;
+
+        } elseif( $lat_deg < -90.0 )
+        {
+            $lat_deg = -180.0 - $lat_deg;
+        }
+        return $lat_deg;
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------
+    public function normaliseLon_deg(
+        float $lon_deg
+    ) : float
+    {
+        if ($lon_deg > 180.0) 
+        {
+            $lon_deg = $lon_deg - 360.0;
+
+        } elseif( $lon_deg < -180.0 ) 
+        {
+            $lon_deg = $lon_deg + 360.0;
+        }
+        return $lon_deg;
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------
+    public function ll2FromLL1WithBearingAndDistance_deg(
+        float $lat1_rad,
+        float $lon1_rad,
+        float $bearing_rad,
+        float $distance_m
+    ) : array
+    {
+        // From https://www.igismap.com/formula-to-find-bearing-or-heading-angle-between-two-points-latitude-longitude/
+
+        // From https://www.movable-type.co.uk/scripts/latlong.html#dest-point
+        $angular_distance = $distance_m / $this->earthRadiusAtLat_m( $lat1_rad );
+
+        $lat2_rad = asin( sin( $lat1_rad ) * cos($angular_distance ) +
+            cos( $lat1_rad ) * sin($angular_distance ) * cos( $bearing_rad ) );
+        $lon2_rad = $lon1_rad + atan2(sin( $bearing_rad ) * sin( $angular_distance ) * cos( $lat1_rad ),
+                cos( $angular_distance ) - sin( $lat1_rad ) * sin( $lat1_rad ) );
+        return [
+            $this->normaliseLat_deg( rad2deg( $lat2_rad ) ),
+            $this->normaliseLon_deg( rad2deg( $lon2_rad ) )
+        ];
     }
 
     // -----------------------------------------------------------------------------------------------------------------
@@ -393,19 +503,25 @@ var_dump( $E + $easting_offset,
         $x = null;
         $y = null;
         $z = null;
+        $repeat_type = null;
+        $repeat_count = null;
 
         //$re_osg  = '^[HJNOST][A-HJ-Z] ?[0-9]{5} ?[0-9]{5}$';
-        $re_osg  = '^(H[L-Z]|J[LMQRVW]|[NS][A-HJ-Z]|[OT][ABFGLMQRVW]) ?([0-9]{5}) ?([0-9]{5})$';
-        $re_osen = '^([0-9]{6,7}) ?([0-9]{6,7})$';
+        $re_osg  = '^(H[L-Z]|J[LMQRVW]|[NS][A-HJ-Z]|[OT][ABFGLMQRVW]) ?([0-9]{5}) ?([0-9]{5})';
+        $re_osen = '^([0-9]{6,7}) ?([0-9]{6,7})';
         $re_dms1 = '^([0-9]{1,3})[°] ?([0-9]{1,2})[\'] ?([0-9]{1,2}(?:\.[0-9]+)?)["]'; //([NESWnesw])';
         $re_dms2 = '^([0-9]{1,3})[:] ?([0-9]{1,2})[:] ?([0-9]{1,2}(?:\.[0-9]+)?)'; //([NESWnesw])';
         $re_dd   = '^-?\d{1,3}(?:\.\d+)?';
+        $re_suffix = '^ *((?: *\*)+|(?: *x)+) *(\d+)$';
+
+        $rest = '';
 
         $match = mb_ereg( $re_osg, $coordinate_to_test, $matches );
         if ($match)
         {
             list( $lat, $lon, $lat_r, $lon_r, $x, $y, $z ) = $this->convert_osg_to_dms( $matches[1], (int)$matches[2], (int)$matches[3] );
 //file_put_contents($this->DEBUGFILE, 'wtva/'.__LINE__. sprintf( ' converted %s (%s, %s) to Coordinates %0.6f, %0.6f', $coordinate_to_test, $matches[2], $matches[3], $lat, $lon) .PHP_EOL, FILE_APPEND);
+            $rest = mb_substr( $coordinate_to_test, mb_strlen( $matches[0] ) );
             $coord_okay = true;
         }
         if (! $match)
@@ -415,6 +531,7 @@ var_dump( $E + $easting_offset,
             {
                 list( $lat, $lon, $lat_r, $lon_r, $x, $y, $z ) = $this->convert_os_en_to_dms( (int)$matches[1], (int)$matches[2] );
 //file_put_contents($this->DEBUGFILE, 'wtva/'.__LINE__. sprintf( ' converted %s (%s, %s) to Coordinates %0.6f, %0.6f', $coordinate_to_test, $matches[1], $matches[2], $lat, $lon) .PHP_EOL, FILE_APPEND);
+                $rest = mb_substr( $coordinate_to_test, mb_strlen( $matches[0] ) );
                 $coord_okay = true;
             }
         }
@@ -447,6 +564,7 @@ var_dump( $E + $easting_offset,
                             $lon = (float)$matches[1] + (float)$matches[2] / 60 + (float)$matches[3] / 3600;
                             if (mb_strtoupper( $hemisphere) == 'W')
                             {
+                                $rest = mb_substr( $coord_part2, mb_strlen( $match_len + 1 ) );
                                 $lon = -$lon;
                                 $coord_okay = true;
                                 $lat_r = deg2rad( $lat );
@@ -470,9 +588,10 @@ var_dump( $E + $easting_offset,
                 $lat = (float)$matches[0];
                 $match_len = mb_strlen( $matches[0] );
                 $coord_part2 = mb_substr( $coordinate_to_test, $match_len );
-                $match = mb_ereg( $re_dd, $coordinate_to_test );
+                $match = mb_ereg( $re_dd, $coordinate_to_test, $matches );
                 if ($match)
                 {
+                    $rest = mb_substr( $coord_part2, mb_strlen( $matches[0] ) );
                     $lon = (float)$matches[0];
                     $coord_okay = true;
                     $lat_r = deg2rad( $lat );
@@ -485,13 +604,205 @@ var_dump( $E + $easting_offset,
                 }
             }
         }
-        return [ $coord_okay, $lat, $lon, $lat_r, $lon_r, $x, $y, $z ];
+        if ($coord_okay)
+        {
+            // Now test if the repetition suffix is valid
+            $rest = mb_trim( $rest );
+            if (mb_strlen( $rest ) > 0)
+            {
+                $match = mb_ereg( $re_suffix, $rest, $matches );
+                if ( ! $match)
+                {
+                    $coord_okay = true;
+                } else
+                {
+                    $repeat_type = mb_ereg_replace( ' ', '' , $matches[1] );
+                    $repeat_count = (int)$matches[2];
+                }
+            }
+        }
+        return [ $coord_okay, $lat, $lon, $lat_r, $lon_r, $x, $y, $z, $repeat_type, $repeat_count ];
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------
+    protected function guard_size_m(
+        string $repeat_type,
+        float $blade_length_m
+    ) : float
+    {
+        return  $blade_length_m * ($this->safe_blade_length_between_towers_ratio - 1 + max( mb_strlen( $repeat_type ) * 2 / 3, 1 ));
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------
+    protected function hexagonal_packing_content_for_shell(
+        int $n
+    ) : int
+    {
+        return 3 * $n * ( $n - 1 ) + 1;
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------
+    protected function hexagonal_packing_for(
+        int $Tn
+    ) : array
+    {
+        // First need to solve Tn = 3n(n-1) + 1
+        $n = (3 + sqrt( 12 * $Tn -3)) / 6;
+        if ( $n != floor( $n ) )
+        {
+            $n = floor( $n ) + 1;
+            $Tn = $this->hexagonal_packing_content_for_shell( $n );
+        }
+        return [ $n, $Tn ];
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------
+    protected function radius_of_enclosing_circle_for_repeats(
+        int $repeat_count,
+        float $tower_footprint_diameter_m
+    ) : float
+    {
+        $r = $tower_footprint_diameter_m / 2;
+        $Tn = $repeat_count;
+
+        /*
+        /*
+         * The following solution is based on using TRIANGLES as the clustering arrangement
+
+        // First need to find the next higher triangular number (unless repeat_count is already one)
+        $n = (-1 + sqrt(1 + 8 * $Tn)) / 2;
+        if ( $n != floor( $n ) )
+        {
+            $n = floor( $n ) + 1;
+            $Tn = $n * ( $n + 1 ) / 2;
+        }
+
+        // This is the smallest enclosing circle for a cluster of the most densely packed circles (turbine footprints)
+
+        return $r * (1 + 2* ($n - 1) * ( ($n % 1) ? 1 : sqrt(3)));
+
+        */
+
+        // THe following code is for using hexagons as the clustering arrangement. Apparently only proven in 1998
+        // by Thomas Hales ("Honeycomb Conjecture") to be the most efficient packing of circles. Fabulous.
+        // Apparently gives about 90% efficiency. So, total area used is 1/0.9 = 1.1111111111111112 * r
+
+        list( $n, $Tn ) = $this->hexagonal_packing_for( $Tn );
+        return $r * (1 + 2 * ($n - 1));
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------
+    protected function create_repeated_turbines(
+        string $base_name,
+        array $lat_lon,
+        int $Tn,
+        float $tower_footprint_m
+    ) : bool
+    {
+        $okaySoFar = true;
+        /*
+                      v This "vertex" is 30 deg bearing from C and distance (2*r * 3)
+               . . . .
+              . . . . .
+             . . . . . .<- this cell is on a bearing of 150 from the vertex above, distance (2*r * 2)
+            . . . C . . .
+             . . . . . .
+              . . . . .
+               . . . .
+
+        */
+//file_put_contents($this->DEBUGFILE, 'wtva/'.__LINE__. sprintf( ' base_name=%s lat=%0.6f lon=%0.6f Tn=%d tower_footprint_m=%0.1f', $base_name, $lat_lon[0], $lat_lon[1], $Tn, $tower_footprint_m) .PHP_EOL, FILE_APPEND);
+
+        $centre_lat_r = deg2rad($lat_lon[0]);
+        $centre_lon_r = deg2rad($lat_lon[1]);
+        $this->locations[] = [
+            true,
+            $base_name .'/1',
+            $lat_lon[0], $lat_lon[1],
+            $centre_lat_r, $centre_lon_r,
+            null, null, null,
+            null, null
+        ];
+        $cells = 1; // already created the first one above
+        $shell = 2; // now working on the second shell
+
+        while ($cells < $Tn)
+        {
+            $first_hexagon_vertex = count( $this->locations );
+
+//file_put_contents($this->DEBUGFILE, 'wtva/'.__LINE__. sprintf( ' cells=%d first_hexgon_vertex=%d', $cells, $first_hexagon_vertex) .PHP_EOL, FILE_APPEND);
+
+            for ($i = 0; $i < 6; $i++)
+            {
+                // This fills in the "vertices" of the hexagon for the shell
+                list( $lat, $lon ) = $this->ll2FromLL1WithBearingAndDistance_deg(
+                    $centre_lat_r, $centre_lon_r,
+                    deg2rad( 60 * $i - 30),
+                    $tower_footprint_m * 2 * ($shell - 1)
+                );
+
+//file_put_contents($this->DEBUGFILE, 'wtva/'.__LINE__. sprintf( ' shell=%d i=%d name=%s lat=%0.6f lon=%0.6f', $shell, $i, $base_name .sprintf( '/%d', $cells), $lat, $lon) .PHP_EOL, FILE_APPEND);
+
+                $this->locations[] = [
+                    true,
+                    $base_name .sprintf( '/%d', $cells),
+                    $lat, $lon,
+                    deg2rad($lat), deg2rad($lon),
+                    null, null, null,
+                    null, null
+                ];
+                $cells++;
+                if ($cells >= $Tn)
+                {
+                    break;
+                }
+            }
+            if (($cells < $Tn)
+                && ($shell >= 3)
+            ) {
+                // Now have to "in fill" with the cells between the vertices in the outer shell, for each vertex
+                for ($i = 0; $i < 6; $i++)
+                {
+                    $vertex_lat_r = $this->locations[$first_hexagon_vertex + $i][4];
+                    $vertex_lon_r = $this->locations[$first_hexagon_vertex + $i][5];
+                    // This is how many in fills there are
+                    for ($c = 0; $c < $shell - 2; $c++)
+                    {
+                        list( $lat, $lon ) = $this->ll2FromLL1WithBearingAndDistance_deg(
+                            $vertex_lat_r, $vertex_lon_r,
+                            deg2rad( 60 * ($i + 2) - 30),
+                            $tower_footprint_m * 2 * ($c + 1)
+                        );
+                        $this->locations[] = [
+                            true,
+                            $base_name .sprintf( '/%d', $cells),
+                            $lat, $lon,
+                            deg2rad($lat), deg2rad($lon),
+                            null, null, null,
+                            null, null
+                        ];
+                        $cells++;
+                        if ($cells >= $Tn)
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+            $shell++;
+        }
+
+        return $okaySoFar;
     }
 
     // -----------------------------------------------------------------------------------------------------------------
     protected function check_coordinates() : bool
     {
         $okaySoFar = true;
+        $repeat_type = null;
+        $repeat_count = null;
+        $tower_count = 0;
+        $repeats = [];
 
         if (is_string($this->data[K_LOCATIONS]))
         {
@@ -557,7 +868,12 @@ var_dump( $E + $easting_offset,
                                 }
                                 array_shift( $location_parts );
                             }
-                            list( $coord_okay, $lat, $lon, $lat_r, $lon_r, $x, $y, $z ) = $this->test_coordinate( $location_parts[0] );
+                            list( $coord_okay,
+                                $lat, $lon,
+                                $lat_r, $lon_r,
+                                $x, $y, $z,
+                                $repeat_type, $repeat_count
+                                ) = $this->test_coordinate( $location_parts[0] );
                             if (! $coord_okay)
                             {
                                 $this->messages[] = 'Invalid coordinate provided: '. $location_parts[0];
@@ -565,7 +881,14 @@ var_dump( $E + $easting_offset,
                             }
                             else
                             {
-                                $this->locations[ $location_num ] = [ true, $location_name, $lat, $lon, $lat_r, $lon_r, $x, $y, $z ];
+                                $this->locations[ $location_num ] = [
+                                    true,                       // [0]
+                                    $location_name,             // [1]
+                                    $lat, $lon,                 // [2], [3]
+                                    $lat_r, $lon_r,             // [4], [5]
+                                    $x, $y, $z,                 // [6], [7], [8]
+                                    $repeat_type, $repeat_count // [9], [10]
+                                ];
                             }
                         }
                     }
@@ -580,8 +903,43 @@ var_dump( $E + $easting_offset,
             if ($okaySoFar)
             {
                 // Now need to check the distanced between the towers to ensure they're not too close to each other
+                // otherwise the blades could / will foul with each other - expensive
+
+                $safe_tower_distance_m = $this->guard_size_m(
+                    '*',
+                    $this->data[K_BLADELENGTH]
+                );
+
+                $towers_footprint_total_m2 = 0.0;
+
                 for ($loc_i = 0; $loc_i < count($this->locations); $loc_i++)
                 {
+                    $name_i = $this->locations[$loc_i][1];
+                    if ( empty( $this->locations[$loc_i][9] ))
+                    {
+                        $safe_tower_distance_i_m = $safe_tower_distance_m / 2;
+                    }
+                    else
+                    {
+                        $safe_tower_distance_i_m = $this->radius_of_enclosing_circle_for_repeats(
+                            $this->locations[$loc_i][10],
+                            $this->guard_size_m(
+                                $this->locations[$loc_i][9],
+                                $this->data[K_BLADELENGTH]
+                            )
+                        );
+                        $name_i .= ' (cluster of '. $this->locations[$loc_i][10] .' turbines)';
+                        if ($this->locations[$loc_i][10] > 1)
+                        {
+                            $this->locations[$loc_i][0] = false;
+                            $repeats[] = [
+                                $this->locations[$loc_i][1], // name
+                                $this->locations[$loc_i][2], $this->locations[$loc_i][3], // lat, lon
+                                $this->locations[$loc_i][9], $this->locations[$loc_i][10] // repeat type, repeat count
+                            ];
+                        }
+                    }
+                    $towers_footprint_total_m2 += M_PI * $safe_tower_distance_i_m * $safe_tower_distance_i_m;
 
                     for ($loc_j = $loc_i+1; $loc_j < count($this->locations); $loc_j++)
                     {
@@ -595,18 +953,80 @@ var_dump( $E + $easting_offset,
                         );
 //file_put_contents($this->DEBUGFILE, 'wtva/'.__LINE__. ' tower distance check i='. $loc_i .' ('. $this->locations[$loc_i][2] .','. $this->locations[$loc_i][3] .') j='. $loc_j .' ('. $this->locations[$loc_j][2] .','. $this->locations[$loc_j][3] .') dist_m='. $dist_m .PHP_EOL, FILE_APPEND);
 
-                        if ( $dist_m < ( $this->safe_blade_length_between_towers_ratio * $this->data[K_BLADELENGTH]))
+                        $name_j = $this->locations[$loc_j][1];
+                        if ( empty( $this->locations[$loc_j][9] ))
+                        {
+                            $safe_tower_distance_j_m = $safe_tower_distance_m / 2;
+                        }
+                        else
+                        {
+                            $safe_tower_distance_j_m = $this->radius_of_enclosing_circle_for_repeats(
+                                $this->locations[$loc_j][10],
+                                $this->guard_size_m(
+                                    $this->locations[$loc_j][9],
+                                    $this->data[K_BLADELENGTH]
+                                )
+                            );
+                            $name_j .= ' (cluster of '. $this->locations[$loc_j][10] .' turbines)';
+                        }
+
+                        if ( $dist_m < ( $safe_tower_distance_i_m + $safe_tower_distance_j_m ) )
                         {
                             $this->locations[$loc_j][0] = false;// "Disable" generation for this turbine
-                            $this->messages[] = sprintf('Towers are too close together: %s and %s (%0.1fm) blades (%dm) could clash',
-                                $this->locations[$loc_i][1],
-                                $this->locations[$loc_j][1],
+                            $this->messages[] = sprintf('Towers are too close together: %s and %s (%0.1fm) - blades (%dm long) could clash',
+                                $name_i,
+                                $name_j,
                                 $dist_m,
                                 $this->data[K_BLADELENGTH]
                             );
                             $okaySoFar = false;
                         }
                     }
+                }
+            }
+            if ($okaySoFar)
+            {
+                // last check - have we got so many turbines, there isn't enough land for them????
+                $areas = [
+                    [ $this->land_area_sun_m2,
+                        'Too many turbines / spacing for the Sun - you do know what solar wind is, don\'t you? - %0.1f m2 of "land", %0.1f m2 of towers' ],
+                    [ $this->land_area_earth_m2,
+                        'Too many turbines / spacing for the Earth - thinking big, nice try - %0.1f m2 of land+sea, %0.1f m2 of towers' ],
+                    [ $this->land_area_asia_m2,
+                        'Too many turbines / spacing to fit in Asia (the largest continent) - interesting idea, but... - %0.1f m2 of land+lakes, %0.1f m2 of towers' ],
+                    [ $this->land_area_russia_m2,
+                        'Too many turbines / spacing to fit in Russia (the largest country) - would solve many other problems, though - %0.1f m2 of land+lakes, %0.1f m2 of towers' ],
+                    [ $this->land_area_uk_m2,
+                        'Too many turbines / spacing to fit in the UK - where would people live? - %0.1f m2 of land+water, %0.1f m2 of towers' ],
+                ];
+                foreach($areas as list( $area_m2, $message))
+                {
+                    if ($towers_footprint_total_m2 / $this->hexagonal_packing_efficiency > $area_m2)
+                    {
+                        $this->messages[] = sprintf($message, $area_m2, $towers_footprint_total_m2 / $this->hexagonal_packing_efficiency);
+                        $okaySoFar = false;
+                        break;
+                    }
+                }
+            }
+            if ($okaySoFar
+                && ! empty( $repeats )
+            ) {
+                // So, everything is "okay" (depending on how broad one defines that - perhaps beyond the scope of
+                // non-sentient software.....)
+                // ... now need to generate the repeated turbines.
+
+                foreach( $repeats as $this_repeat )
+                {
+                    $this->create_repeated_turbines(
+                        $this_repeat[0],
+                        [ $this_repeat[1], $this_repeat[2] ],
+                        $this_repeat[4],
+                        $this->guard_size_m(
+                            $this_repeat[3],
+                            $this->data[K_BLADELENGTH]
+                        )
+                    );
                 }
             }
         }
@@ -756,12 +1176,13 @@ var_dump( $E + $easting_offset,
         return htmlspecialchars($value, ENT_XML1 | ENT_COMPAT, 'UTF-8');
     }
 
+    // -----------------------------------------------------------------------------------------------------------------
     public function distanceBetweenLLH_m(
-        float $lat1Deg,
-        float $lon1Deg,
+        float $lat1_deg,
+        float $lon1_deg,
         float|null $elev1,
-        float $lat2Deg,
-        float $lon2Deg,
+        float $lat2_deg,
+        float $lon2_deg,
         float|null $elev2
     ) : float
     {
@@ -769,13 +1190,13 @@ var_dump( $E + $easting_offset,
         // 6371*2*ASIN(SQRT(SIN(PI()/180*(B49-B48)/2)^2+COS(PI()/180*(B48))*COS(PI()/180*(B49))*SIN(PI()/180*(C49-C48)/2)^2))*1000
 
         /*
-        $d1 = sin( pi() / 180 * ( $lat2Deg - $lat1Deg ) / 2 ) ** 2 * 10 ** 15;
-        $d2 = cos( pi() / 180 * $lat1Deg ) *
-            cos( pi() / 180 * $lat2Deg ) *
-            sin( pi() / 180 * ( $lon2Deg - $lon1Deg ) / 2 ) ** 2 * 10 ** 15;
-        $d3 = sin( pi() / 180 * ( $lon2Deg - $lon1Deg ) / 2 ) * 10 ** 8;
-        $d4 = pi() / 180 * ( $lon2Deg - $lon1Deg ) / 2 * 10 ** 8;
-        $d5 = ( $lon2Deg - $lon1Deg ) / 2 * 10 ** 8;
+        $d1 = sin( pi() / 180 * ( $lat2_deg - $lat1_deg ) / 2 ) ** 2 * 10 ** 15;
+        $d2 = cos( pi() / 180 * $lat1_deg ) *
+            cos( pi() / 180 * $lat2_deg ) *
+            sin( pi() / 180 * ( $lon2_deg - $lon1_deg ) / 2 ) ** 2 * 10 ** 15;
+        $d3 = sin( pi() / 180 * ( $lon2_deg - $lon1_deg ) / 2 ) * 10 ** 8;
+        $d4 = pi() / 180 * ( $lon2_deg - $lon1_deg ) / 2 * 10 ** 8;
+        $d5 = ( $lon2_deg - $lon1_deg ) / 2 * 10 ** 8;
         */
 
         if (is_float( $elev1 )
@@ -793,10 +1214,10 @@ var_dump( $E + $easting_offset,
 
         // See http://www.movable-type.co.uk/scripts/latlong.html for haversine formula
 
-        $a = sin(deg2rad($lat2Deg - $lat1Deg) / 2) ** 2 +
-            cos(deg2rad($lat1Deg)) *
-            cos(deg2rad($lat2Deg)) *
-            sin(deg2rad($lon2Deg - $lon1Deg) / 2) ** 2;
+        $a = sin(deg2rad($lat2_deg - $lat1_deg) / 2) ** 2 +
+            cos(deg2rad($lat1_deg)) *
+            cos(deg2rad($lat2_deg)) *
+            sin(deg2rad($lon2_deg - $lon1_deg) / 2) ** 2;
 
         $distance_m = $this->wgs84_a_m * 2 *
             asin(sqrt( $a ));
@@ -3444,6 +3865,7 @@ DAE;
                 </ResourceMap>
             </Model>
         </Placemark>
+
 KML;
 
         }
