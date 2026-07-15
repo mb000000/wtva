@@ -848,15 +848,16 @@ var_dump( $E + $easting_offset,
                     }
                     if ($okaySoFar)
                     {
-                        if ( (count( $location_parts) > 2) || (count( $location_parts) < 1) )
+//file_put_contents($this->DEBUGFILE, 'wtva/'.__LINE__. sprintf(' location_parts=%s', print_r( $location_parts, true ) ) .PHP_EOL, FILE_APPEND);
+                        if ( (count( $location_parts) > 3) || (count( $location_parts) < 1) )
                         {
-                            $this->messages[] = 'Invalid location provided (more than just name and coordinates): ' . $location;
+                            $this->messages[] = 'Invalid location provided (more than just name and coordinates  ): ' . $location;
                             $okaySoFar = false;
                         }
                         else
                         {
                             $location_name = sprintf( '%d', $location_num + 1);
-                            if (count( $location_parts) == 2)
+                            if (count( $location_parts) > 1 )
                             {
                                 $n = $location_parts[0];
                                 if ( (mb_substr( $n, 0, 1) == '[')
