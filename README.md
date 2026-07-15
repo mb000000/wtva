@@ -38,7 +38,7 @@ is just a box.
 So, the blades? Well, each one could be modelled as a box, a frustum or any number 
 of other primitives. But to make the visualisation as convincing as possible, it 
 seemed like they need to be tapering (like a frustum, yay!), but with a longitudinal
-twist and have something like an aerodynamic cross section (an aerodynamics chord). 
+twist and have something like an aerodynamic cross section (an aeronautical chord). 
 Also, a longitudinal flattening. Hmmm - not so easy. But perhaps take a 
 hemisphere, elongate it, flatten that, twist it and "somehow" create a cross section
 using an elongation in one axis, but only applied for half of the cross section. So,
@@ -77,7 +77,7 @@ each trasnform being successively applied to the 3D point.
 
 That meant for the blade I could implement something that handled the application 
 of the scaling (in this case, the X axis) but only for positive values of X. So, 
-if I arrange that a circle is flat (i.e. only varying in X and Y) and centred on
+if I arrange that a circle is horizontal (i.e. only varying in X and Y) and centred on
 the origin (0,0), by scaling only for positive values of X, I get half of an ellipse. 
 The other half is still a semicricle (at the "back") with the 
 highly tapered semicircle "at the front", which is reasonably convincing as a 
@@ -88,11 +88,11 @@ or hemisphere, is
 That was the 3D modelling solved (!). And thus the generation of the .DAE file.
 ## Collada DAE and KML?
 The Collada 3D model is easily referred to by the KML file, which allows the one 
-model to be instantiated multiple times, once at location. In addition, the 
+model to be instantiated multiple times, once at each location. In addition, the 
 instantiation also allows some simple transforms to be performed, so the 
 different orientations are handled simply by applying a rotation in the Z axis
 (ah - many uses of Collade DAE models decide to use a "Y axis is up" convention - so, 
-in those instances, that would be a rotation about the Y axis).
+in those instances, that would be a rotation about the Y axis - wtva uses Z is up).
 
 The KMZ file is simply a ZIP file containing the KML file and the Collada DAE file - 
 yes, really.
@@ -106,7 +106,8 @@ is converting from this grid mechanism (which is a projection - remember Mercato
 projected? (as an aside - it's an interesting album by East of Eden)) to latitude 
 and longitude. The maths for this are horrendous, but it's fairly well documented. 
 Then after having converted from the OS Grid reference, there's also the need to 
-change the datum from Airy1830 to WGS84. These data effectively define the 
+change the datum from Airy1830 (used by UK Ordnance Survey) to WGS84. 
+These data effectively define the 
 approximation of the shape of the Earth, which is an ellipsoid. The different data 
 use subtly different approximations, so the conversion is quite important. Again, 
 this is well documented (and not quite as horrendous as the projection maths).
